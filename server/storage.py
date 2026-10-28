@@ -6,9 +6,6 @@ import secrets
 import sqlite3
 import uuid
 
-# Experience shown on the result screen for every Gem Grab finish.
-EXPERIENCE_REWARD = 8
-
 class Accounts:
     def __init__(self, path):
         self.path = str(path)
@@ -45,18 +42,17 @@ class Accounts:
             db.execute("INSERT INTO battles(id, account_id, status) VALUES (?, ?, 'active')", (match_id, account_id))
         return match_id
 
-    def complete_battle(self, account_id, match_id, result):
-        # Gem Grab rewards; only a completed, active match can award tokens.
-        if result not in (0, 1, 2):
-            raise ValueError('invalid battle result')
-        reward = (20, 10, 15)[result]
-        trophy_delta = (8, 0, 0)[result]
-        experience_gain = EXPERIENCE_REWARD
+    def complete_battle(self, account_id, match_id, reward, trophy_delta, experience_gain):
+        """Apply one battle's rewards; only a completed, active match can award them."""
+        if reward < 0 or experience_gain < 0:
+            raise ValueError('invalid battle reward')
         with closing(sqlite3.connect(self.path)) as db, db:
             changed = db.execute("UPDATE battles SET status='complete', reward=? WHERE id=? AND account_id=? AND status='active'", (reward, match_id, account_id)).rowcount
             if not changed:
                 return None
             before = db.execute('SELECT trophies, highest_trophies, experience FROM accounts WHERE id=?', (account_id,)).fetchone()
+            # Trophies never drop below zero.
+            trophy_delta = max(trophy_delta, -before[0])
             db.execute('UPDATE accounts SET tokens=tokens+?, trophies=trophies+?, highest_trophies=MAX(highest_trophies, trophies+?), experience=experience+? WHERE id=?',
                        (reward, trophy_delta, trophy_delta, experience_gain, account_id))
             tokens, trophies = db.execute('SELECT tokens, trophies FROM accounts WHERE id=?', (account_id,)).fetchone()

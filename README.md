@@ -2,7 +2,16 @@
 
 Terra is an experimental Python server and Android client patch for Brawl Stars 25.107. It is an unofficial project and is not affiliated with Supercell.
 
-The client can log in, create and restore a local account, choose a name, and play Gem Grab against five computer-controlled bots. Completed battles award tokens towards the Brawl Box counter and trophies; both survive restarts. A win awards 20 tokens and 8 trophies, a draw awards 15 tokens, and a loss awards 10 tokens. Every battle also awards 8 experience. The result screen animates Shelly's rank bar and the experience bar from the saved values and plays a rank-up when a rank threshold is crossed. Experience is saved but not yet shown in the lobby. This was tested on an ARM-compatible Android 14 tablet. Opening boxes, most progression, the shop, clubs, and friends are not implemented yet.
+The client can log in, create and restore a local account, choose a name, and play two events against computer-controlled bots: Gem Grab (3v3 with five bots) and Solo Showdown (with nine bots). Completed battles award tokens towards the Brawl Box counter, trophies and experience; all survive restarts.
+
+| Event | Tokens | Trophies |
+| --- | --- | --- |
+| Gem Grab | win 20, draw 15, loss 10 | win +8 |
+| Solo Showdown, places 1–10 | 20, 18, 16, 14, 12, 10, 8, 6, 4, 2 | +10, +8, +7, +6, +4, +2, +2, +1, 0, 0 |
+
+Every battle also awards 8 experience. The Showdown trophies follow the game's lowest trophy bracket (0–49); the Showdown token amounts are this server's own choice. The result screen animates Shelly's rank bar and the experience bar and plays a rank-up when a rank threshold is crossed. Back in the lobby, the earned trophies and tokens fly into their counters. Experience is saved but not yet shown in the lobby.
+
+This was tested on an ARM-compatible Android 14 tablet. Duo Showdown (the client shows a Duo button, but it falls back to Gem Grab), opening boxes, most progression, the shop, clubs, and friends are not implemented yet.
 
 ## Run the server
 

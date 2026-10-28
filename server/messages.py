@@ -3,6 +3,7 @@
 Field order is informed by DDBS-V25; these layouts require client validation.
 """
 from protocol import Writer
+from battles import EVENT_LOCATIONS
 
 def login_ok(player):
     w = Writer()
@@ -16,7 +17,8 @@ def login_ok(player):
     w.integer(0).integer(0).vint(0).string().values(1, 1).string()
     return w.bytes()
 
-def home_data(p):
+def home_data(p, pending=()):
+    """Own home data (24101). pending: (type, amount) gains the lobby animates."""
     w = Writer()
     w.values(0, 0, p.get('trophies', 0), p.get('trophies', 0), 0, 95, 99999).reference(28, 0).reference(43, 0)
     w.values(0, 1).reference(29, 0).values(1).reference(29, 0)
@@ -25,10 +27,17 @@ def home_data(p):
     w.boolean(True).boolean(True).boolean(True)
     w.values(0, 0, 0, 0, 200, 0, 0, 0, 0).reference(16, 0)
     w.string('GB').string('')
-    w.values(0, 0, 0, 0, 0, 2019049, 100, 10, 30, 3, 80, 10, 50, 1000, 500, 50, 999900, 0)
+    # Pending gains (libg ClientHome daily data +0xc4), as int pairs.
+    w.vint(len(pending))
+    for kind, amount in pending:
+        w.integer(kind).integer(amount)
+    w.values(0, 0, 0, 0, 2019049, 100, 10, 30, 3, 80, 10, 50, 1000, 500, 50, 999900, 0)
     w.vint(20)
     for i in range(20): w.vint(i)
-    w.vint(1).values(1, 1, 0, 86400, 0).reference(15, 7).vint(3).string().values(0, 0, 0).boolean(False).vint(0)
+    # Event slots: slot, slot index, ?, seconds left, ?, location, ...
+    w.vint(len(EVENT_LOCATIONS))
+    for slot, location in enumerate(EVENT_LOCATIONS, 1):
+        w.values(slot, slot, 0, 86400, 0).reference(15, location).vint(3).string().values(0, 0, 0).boolean(False).vint(0)
     w.vint(0)
     for vals in ((20,35,75,140,290,480,800,1250),(1,2,3,4,5,10,15,20),(10,30,80),(6,20,60),(20,50,140,280),(150,400,1200,2600)):
         w.vint(len(vals)).values(*vals)

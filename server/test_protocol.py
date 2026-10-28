@@ -5,7 +5,8 @@ import unittest
 import tempfile
 from pathlib import Path
 from storage import Accounts
-from battles import read_result, result_message
+from battles import GEM_GRAB, SOLO_SHOWDOWN, pending_gains, read_result, result_message
+from messages import home_data
 from unittest.mock import patch
 from protocol import Reader, Writer, packet, read_packet
 from app import decode_login, client
@@ -86,13 +87,14 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
     def test_battle_result_wire_format(self):
         # Native v25 Gem Grab result with one player and five bots.
         payload = bytes.fromhex('0001000f070610001d00010100000003596f751004000000000000013110120000000000000132101300000000000001331003000100000000013410080001000000000135')
-        outcome, roster = read_result(payload)
-        self.assertEqual(outcome, 0)
+        result = read_result(payload)
+        roster = result.participants
+        self.assertEqual((result.mode, result.outcome, result.reward, result.trophy_delta), (GEM_GRAB, 0, 20, 8))
         self.assertEqual(len(roster), 6)
         self.assertEqual(sum(p['local'] for p in roster), 1)
         progress = {'reward': 20, 'trophy_delta': 8, 'old_trophies': 8, 'old_highest_trophies': 8,
                     'old_experience': 16, 'experience_gain': 8}
-        encoded = result_message({'id': 1, 'name': 'Test'}, roster, 0, progress)
+        encoded = result_message({'id': 1, 'name': 'Test'}, result, progress)
         r = Reader(encoded)
         self.assertEqual([r.vint() for _ in range(16)], [0, 0, 20, 8] + [0] * 12)
         r.take(2)
@@ -115,22 +117,59 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             read_result(payload[:-1])
         # The client's second and third header values vary between matches.
-        self.assertEqual(read_result(bytes.fromhex('0002') + payload[2:])[0], 0)
+        self.assertEqual(read_result(bytes.fromhex('0002') + payload[2:]).outcome, 0)
+
+    def test_solo_showdown_result(self):
+        # Native v25 Solo Showdown win on location 220: ten players, one per team.
+        payload = bytes.fromhex('0100010f9c030a10001d00000100000003646576100c0001000000000131101e000200000000013210020003000000000133101e0004000000000134100e0005000000000135100f0006000000000136100e00070000000001371010000800000000013810100009000000000139')
+        result = read_result(payload)
+        self.assertEqual((result.mode, result.placement, result.reward, result.trophy_delta), (SOLO_SHOWDOWN, 1, 20, 10))
+        self.assertEqual(len(result.participants), 10)
+        progress = {'reward': 20, 'trophy_delta': 10, 'old_trophies': 24, 'old_highest_trophies': 24,
+                    'old_experience': 0, 'experience_gain': 8}
+        r = Reader(result_message({'id': 1, 'name': 'Test'}, result, progress))
+        # Showdown layout with the placement in place of the outcome.
+        self.assertEqual([r.vint() for _ in range(4)], [2, 1, 20, 10])
+        # Tenth place earns nothing and an impossible placement is rejected.
+        last = bytearray(payload); last[2] = 10
+        self.assertEqual(read_result(bytes(last)).reward, 2)
+        self.assertEqual(read_result(bytes(last)).trophy_delta, 0)
+        last[2] = 11
+        with self.assertRaises(ValueError):
+            read_result(bytes(last))
+        # A Gem Grab location with a Showdown roster is rejected.
+        wrong = payload[:4] + bytes([7]) + payload[6:]
+        with self.assertRaises(ValueError):
+            read_result(wrong)
+
+    def test_lobby_animates_pending_gains(self):
+        progress = {'reward': 20, 'trophy_delta': 8}
+        self.assertEqual(pending_gains(progress), [(3, 20), (4, 8)])
+        self.assertEqual(pending_gains({'reward': 10, 'trophy_delta': 0}), [(3, 10)])
+        player = {'id': 1, 'name': 'Test', 'tokens': 30, 'trophies': 8}
+        plain, animated = home_data(player), home_data(player, [(3, 20), (4, 8)])
+        # Two int pairs replace the empty list count.
+        self.assertEqual(len(animated) - len(plain), 16)
+        marker = Writer().string('GB').string('').bytes()
+        at = plain.index(marker) + len(marker)
+        self.assertEqual(plain[at], 0)
+        r = Reader(animated[at:])
+        self.assertEqual([r.vint(), r.integer(), r.integer(), r.integer(), r.integer()], [2, 3, 20, 4, 8])
 
     def test_battle_rewards_are_persistent_and_once_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = Accounts(Path(tmp) / 'accounts.sqlite3')
             player = store.login(0, None)
             match = store.begin_battle(player['id'])
-            self.assertEqual(store.complete_battle(player['id'], match, 0)['tokens'], 20)
-            self.assertIsNone(store.complete_battle(player['id'], match, 0))
+            self.assertEqual(store.complete_battle(player['id'], match, 20, 8, 8)['tokens'], 20)
+            self.assertIsNone(store.complete_battle(player['id'], match, 20, 8, 8))
             restored = store.login(player['id'], player['token'])
             self.assertEqual((restored['tokens'], restored['trophies']), (20, 8))
-            second = store.complete_battle(player['id'], store.begin_battle(player['id']), 0)
+            second = store.complete_battle(player['id'], store.begin_battle(player['id']), 20, 8, 8)
             self.assertEqual((second['old_trophies'], second['old_highest_trophies'], second['old_experience']), (8, 8, 8))
             abandoned = store.begin_battle(player['id'])
             store.abandon_battle(player['id'], abandoned)
-            self.assertIsNone(store.complete_battle(player['id'], abandoned, 0))
+            self.assertIsNone(store.complete_battle(player['id'], abandoned, 20, 8, 8))
             self.assertEqual(store.login(player['id'], player['token'])['tokens'], 40)
 
     def test_variable_integers(self):

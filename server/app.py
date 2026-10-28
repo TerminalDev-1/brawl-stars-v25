@@ -4,7 +4,7 @@ import asyncio
 import logging
 from protocol import Reader, Writer, packet, read_packet
 from messages import login_ok, home_data
-from battles import read_result, result_message
+from battles import EXPERIENCE_REWARD, pending_gains, read_result, result_message
 from storage import Accounts
 from pathlib import Path
 
@@ -24,6 +24,7 @@ async def client(reader, writer):
     log.info('connected %s', peer)
     player = None
     active_match = None
+    pending = []
     try:
         while True:
             kind, version, body = await read_packet(reader)
@@ -70,25 +71,29 @@ async def client(reader, writer):
                     log.warning('battle result ignored: no active match')
                     continue
                 try:
-                    outcome, participants = read_result(body)
+                    result = read_result(body)
                 except ValueError:
                     log.warning('rejected battle result payload %s', body.hex())
                     raise
-                progress = accounts.complete_battle(player['id'], active_match, outcome)
+                progress = accounts.complete_battle(player['id'], active_match, result.reward, result.trophy_delta, EXPERIENCE_REWARD)
                 if progress is None:
                     log.warning('battle result already processed')
                     active_match = None
                     continue
                 active_match = None
                 player['tokens'], player['trophies'] = progress['tokens'], progress['trophies']
-                writer.write(packet(23456, result_message(player, participants, outcome, progress)))
+                pending = pending_gains(progress)
+                writer.write(packet(23456, result_message(player, result, progress)))
                 await writer.drain()
-                log.info('battle complete account=%d reward=%d tokens=%d', player['id'], progress['reward'], progress['tokens'])
+                log.info('%s complete account=%d outcome=%d placement=%d reward=%d trophies=%+d tokens=%d',
+                         result.mode.name, player['id'], result.outcome, result.placement,
+                         progress['reward'], progress['trophy_delta'], progress['tokens'])
             elif kind in (14109, 14101) and player is not None:
                 if active_match is not None:
                     accounts.abandon_battle(player['id'], active_match)
                     active_match = None
-                writer.write(packet(24101, home_data(player)))
+                writer.write(packet(24101, home_data(player, pending)))
+                pending = []
                 await writer.drain()
             elif kind == 10108:
                 writer.write(packet(20108))

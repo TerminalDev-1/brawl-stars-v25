@@ -23,6 +23,7 @@ def main():
     p.add_argument('--tools', type=Path, default=DEFAULT_TOOLS, help='directory containing apktool.jar, uber-apk-signer.jar, Frida gadget and platform-tools')
     p.add_argument('--apk', type=Path, help='original v25.107 APK; required for first build')
     p.add_argument('--transport', action='store_true', help='embed experimental v25 server transport')
+    p.add_argument('--script', type=Path, help='embed this Frida script instead (development tracing)')
     p.add_argument('--debugger', action='store_true', help='wait for a Frida debugger at port 27042')
     p.add_argument('--install', action='store_true')
     p.add_argument('--serial', help='ADB device serial')
@@ -52,7 +53,8 @@ def main():
     shutil.copyfile(tools / 'libfrida-gadget-arm.so', lib / 'libgadget.so')
     interaction = {'type':'listen','address':'127.0.0.1','port':27042,'on_load':'wait'} if a.debugger else {'type':'script','path':'libgadget.script.so'}
     (lib / 'libgadget.config.so').write_text(json.dumps({'interaction': interaction}), encoding='utf-8')
-    shutil.copyfile(PATCH / ('experimental_transport.js' if a.transport else 'diagnostic.js'), lib / 'libgadget.script.so')
+    script = a.script or PATCH / ('experimental_transport.js' if a.transport else 'diagnostic.js')
+    shutil.copyfile(script, lib / 'libgadget.script.so')
     out = ROOT / 'build'
     out.mkdir(exist_ok=True)
     unsigned = out / 'terra-v25-diagnostic-unsigned.apk'

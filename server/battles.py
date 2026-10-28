@@ -1,15 +1,84 @@
-"""v25 bot battle result handling."""
+"""v25 bot battle modes, rewards and result handling."""
+from dataclasses import dataclass
 from protocol import Reader, Writer
 
 # Milestone types from csv_logic/milestones.csv used by the result screen.
 MILESTONE_BRAWLER_RANK = 1
 MILESTONE_EXPERIENCE = 5
-# Reward-pair type the client sums as battle experience (shown as "Victory").
+# Reward-pair type the client sums as battle experience.
 REWARD_EXPERIENCE = 0
+EXPERIENCE_REWARD = 8
 STARTER_POWER = 1
+# Pending gain types the lobby animates into its counters (libg 0x23f2e4, 0x1cfb6c).
+PENDING_TOKENS = 3
+PENDING_TROPHIES = 4
 
 
-def result_message(player, participants, outcome, progress):
+@dataclass(frozen=True)
+class Mode:
+    name: str
+    location: int          # row in csv_logic/locations.csv
+    players: int
+    team_size: int
+    layout: int            # battle-end screen layout (header value 0)
+    tokens: tuple          # indexed by outcome (Gem Grab) or placement - 1
+    trophies: tuple
+
+    @property
+    def placement(self):
+        return self.team_size == 1
+
+
+# Gem Grab outcome order is win, loss, draw. Showdown values are for the
+# 0-49 trophy bracket, the only one a new account can reach so far. The
+# Showdown token amounts are this server's choice, not taken from the client.
+GEM_GRAB = Mode('Gem Grab', 7, 6, 3, 0, (20, 10, 15), (8, 0, 0))
+SOLO_SHOWDOWN = Mode('Solo Showdown', 220, 10, 1, 2,
+                     (20, 18, 16, 14, 12, 10, 8, 6, 4, 2),
+                     (10, 8, 7, 6, 4, 2, 2, 1, 0, 0))
+MODES = {m.location: m for m in (GEM_GRAB, SOLO_SHOWDOWN)}
+# Event slots offered in the lobby. The client also shows a Duo button for
+# Showdown, but it falls back to Gem Grab; Duo is not supported yet.
+EVENT_LOCATIONS = (GEM_GRAB.location, SOLO_SHOWDOWN.location)
+
+
+@dataclass
+class BattleResult:
+    mode: Mode
+    outcome: int           # Gem Grab: 0 win, 1 loss, 2 draw
+    placement: int         # Showdown: 1 is first place
+    participants: list
+
+    @property
+    def standing(self):
+        """Index into the mode's reward tables."""
+        return self.placement - 1 if self.mode.placement else self.outcome
+
+    @property
+    def reward(self):
+        return self.mode.tokens[self.standing]
+
+    @property
+    def trophy_delta(self):
+        return self.mode.trophies[self.standing]
+
+    @property
+    def screen_outcome(self):
+        """Header value 1: the outcome, or the placement in Showdown layouts."""
+        return self.placement if self.mode.placement else self.outcome
+
+
+def pending_gains(progress):
+    """Counter animations the lobby plays after the next home data."""
+    gains = []
+    if progress['reward'] > 0:
+        gains.append((PENDING_TOKENS, progress['reward']))
+    if progress['trophy_delta'] > 0:
+        gains.append((PENDING_TROPHIES, progress['trophy_delta']))
+    return gains
+
+
+def result_message(player, result, progress):
     """Encode the v25 battle-end message (23456) for the native client.
 
     Layout, as decoded by libg.so 25.107 at 0x141274:
@@ -18,10 +87,11 @@ def result_message(player, participants, outcome, progress):
     a data reference and an optional trailing object.
     """
     w = Writer()
-    # Header: [0] result layout (0 = 3v3), [1] outcome, [2] tokens, [3] trophy change.
-    w.values(0, outcome, progress['reward'], progress['trophy_delta'], *([0] * 12))
+    # Header: [0] screen layout, [1] outcome or placement, [2] tokens, [3] trophy change.
+    w.values(result.mode.layout, result.screen_outcome, progress['reward'], progress['trophy_delta'], *([0] * 12))
     # Ten adjacent boolean fields are packed low-bit first.
     w.data.extend((16, 0))
+    participants = result.participants
     w.vint(len(participants))
     human_team = next(p['team'] for p in participants if p['local'])
     for p in participants:
@@ -52,12 +122,14 @@ def result_message(player, participants, outcome, progress):
 
 
 def read_result(payload):
+    """Decode a 14110 bot-battle result sent by the client's local simulation."""
     r = Reader(payload)
-    # The second value comes from client game state and the third is only set
-    # for Showdown placements; neither affects Gem Grab rewards.
-    outcome, state, rank = r.vint(), r.vint(), r.vint()
+    # The second value comes from client game state. The third is the
+    # Showdown placement (libg 0x47db24): teams still standing, plus one.
+    outcome, _state, placement = r.vint(), r.vint(), r.vint()
     table, location, count = r.vint(), r.vint(), r.vint()
-    if outcome not in (0, 1, 2) or (table, location, count) != (15, 7, 6):
+    mode = MODES.get(location)
+    if table != 15 or mode is None or count != mode.players or outcome not in (0, 1, 2):
         raise ValueError('unexpected bot battle result')
     participants = []
     for _ in range(count):
@@ -70,13 +142,17 @@ def read_result(payload):
         skin = r.vint() if skin_table else None
         team, local, name = r.vint(), r.vint(), r.string()
         # characters.csv in 25.107 has 103 rows.
-        if not 0 <= character < 103 or team not in (0, 1) or local not in (0, 1) or not name or len(name) > 40:
+        if not 0 <= character < 103 or not 0 <= team < count or local not in (0, 1) or not name or len(name) > 40:
             raise ValueError('invalid battle participant')
         participants.append({'brawler': character, 'skin': skin, 'team': team, 'local': bool(local), 'name': name})
     if r.offset != len(payload) or sum(p['local'] for p in participants) != 1:
         raise ValueError('invalid battle roster')
-    if any(sum(p['team'] == team for p in participants) != 3 for team in (0, 1)):
+    teams = count // mode.team_size
+    if sorted({p['team'] for p in participants}) != list(range(teams)) or \
+            any(sum(p['team'] == t for p in participants) != mode.team_size for t in range(teams)):
         raise ValueError('invalid team composition')
     if next(p for p in participants if p['local'])['brawler'] != 0:
         raise ValueError('unowned brawler')
-    return outcome, participants
+    if mode.placement and not 1 <= placement <= teams:
+        raise ValueError('invalid placement')
+    return BattleResult(mode, outcome, placement, participants)
