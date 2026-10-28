@@ -6,18 +6,18 @@ The client can log in, create and restore a local account, choose a name, and pl
 
 ### Rewards
 
-Terra boosts box rewards: every token and star token amount is 8× the game's usual amount, and a Brawl Box needs 50 tokens instead of 100. Star boxes still need 10 star tokens.
+Terra boosts box rewards: tokens are 80× the game's usual amounts and star tokens 8×. Both a Brawl Box and a Big Box need just 1 token or star token.
 
 | Event | Tokens | Star tokens | Trophies |
 | --- | --- | --- | --- |
-| Gem Grab | win 160, draw 120, loss 80 | win 8 | win +8 |
-| Solo Showdown, places 1–10 | 160, 144, 128, 112, 96, 80, 64, 48, 32, 16 | places 1–4: 8 | +10, +8, +7, +6, +4, +2, +2, +1, 0, 0 |
+| Gem Grab | win 1,600, draw 1,200, loss 800 | win 8 | win +8 |
+| Solo Showdown, places 1–10 | 1,600, 1,440, 1,280, 1,120, 960, 800, 640, 480, 320, 160 | places 1–4: 8 | +10, +8, +7, +6, +4, +2, +2, +1, 0, 0 |
 
 Every battle also awards 8 experience. Each brawler keeps its own trophies; the account total is their sum. The Showdown trophies follow the game's lowest trophy bracket (0–49). The Showdown token amounts and counting places 1–4 as a Showdown win are this server's own choices. The result screen animates the brawler's rank bar and the experience bar and plays a rank-up when a rank threshold is crossed. Back in the lobby, the earned trophies, tokens and star tokens fly into their counters. Experience is saved but not yet shown in the lobby, and boxes cannot be opened yet.
 
 ### Pixel
 
-Pixel uses Max's model and animations and fires 8-Bit's blaster beams: 6,200 health, very fast movement, and a burst of 6 beams at 1,500 damage each with very long range. Her Super, Power Surge, throws 8-Bit's damage booster turret (2,800 health, +30% damage for nearby allies), which also leaves a Max-style speed boost where it lands. The client data for her is added by [client_patch/pixel.py](client_patch/pixel.py) during the APK build.
+Pixel uses Max's model and animations and fires 8-Bit's blaster beams with 8-Bit's laser sounds: 6,200 health, very fast movement, and a burst of 6 beams at 1,500 damage each with a range of 7 tiles. Her Super, Power Surge, throws 8-Bit's damage booster turret (2,800 health, +30% damage for nearby allies), which also leaves a Max-style speed boost where it lands. The client data for her is added by [client_patch/pixel.py](client_patch/pixel.py) during the APK build.
 
 This was tested on an ARM-compatible Android 14 tablet. Pixel's damage booster turret was seen in battle; the speed boost from her Super has not been visually confirmed yet. Duo Showdown (the client shows a Duo button, but it falls back to Gem Grab), opening boxes, most progression, the shop, clubs, and friends are not implemented yet.
 

@@ -31,7 +31,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                     writer.write(packet(14110, payload) + packet(14109)); await writer.drain()
                     self.assertEqual((await asyncio.wait_for(read_packet(reader), 2))[0], 24101)
                     with closing(sqlite3.connect(store.path)) as db:
-                        self.assertEqual(db.execute('SELECT tokens, star_tokens FROM accounts WHERE id=?', (account_id,)).fetchone(), (160, 8))
+                        self.assertEqual(db.execute('SELECT tokens, star_tokens FROM accounts WHERE id=?', (account_id,)).fetchone(), (1600, 8))
                     writer.close(); await writer.wait_closed()
 
     async def test_fragmented_packet(self):
@@ -89,7 +89,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         payload = bytes.fromhex('0001000f070610001d00010100000003596f751004000000000000013110120000000000000132101300000000000001331003000100000000013410080001000000000135')
         result = read_result(payload)
         roster = result.participants
-        self.assertEqual((result.mode, result.outcome, result.reward, result.trophy_delta, result.star_token_reward), (GEM_GRAB, 0, 160, 8, 8))
+        self.assertEqual((result.mode, result.outcome, result.reward, result.trophy_delta, result.star_token_reward), (GEM_GRAB, 0, 1600, 8, 8))
         self.assertEqual(len(roster), 6)
         self.assertEqual(sum(p['local'] for p in roster), 1)
         progress = {'reward': 20, 'trophy_delta': 8, 'old_trophies': 8, 'old_highest_trophies': 8,
@@ -123,7 +123,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         # Native v25 Solo Showdown win on location 220: ten players, one per team.
         payload = bytes.fromhex('0100010f9c030a10001d00000100000003646576100c0001000000000131101e000200000000013210020003000000000133101e0004000000000134100e0005000000000135100f0006000000000136100e00070000000001371010000800000000013810100009000000000139')
         result = read_result(payload)
-        self.assertEqual((result.mode, result.placement, result.reward, result.trophy_delta, result.star_token_reward), (SOLO_SHOWDOWN, 1, 160, 10, 8))
+        self.assertEqual((result.mode, result.placement, result.reward, result.trophy_delta, result.star_token_reward), (SOLO_SHOWDOWN, 1, 1600, 10, 8))
         self.assertEqual(len(result.participants), 10)
         progress = {'reward': 20, 'trophy_delta': 10, 'old_trophies': 24, 'old_highest_trophies': 24,
                     'old_experience': 0, 'experience_gain': 8}
@@ -132,7 +132,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([r.vint() for _ in range(4)], [2, 1, 20, 10])
         # Tenth place earns nothing and an impossible placement is rejected.
         last = bytearray(payload); last[2] = 10
-        self.assertEqual((read_result(bytes(last)).reward, read_result(bytes(last)).star_token_reward), (16, 0))
+        self.assertEqual((read_result(bytes(last)).reward, read_result(bytes(last)).star_token_reward), (160, 0))
         self.assertEqual(read_result(bytes(last)).trophy_delta, 0)
         last[2] = 11
         with self.assertRaises(ValueError):

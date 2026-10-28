@@ -14,10 +14,12 @@ STARTER_POWER = 1
 PENDING_TOKENS = 3
 PENDING_TROPHIES = 4
 PENDING_STAR_TOKENS = 5
-# This server's reward boost: every token and star token amount is multiplied.
-BOX_REWARD_MULTIPLIER = 8
-# Tokens needed for a Brawl Box (the game's default is 100).
-BRAWL_BOX_COST = 50
+# This server's reward boost on the game's usual amounts.
+TOKEN_MULTIPLIER = 80
+STAR_TOKEN_MULTIPLIER = 8
+# Tokens and star tokens needed for a box (the game's defaults are 100 and 10).
+BRAWL_BOX_COST = 1
+BIG_BOX_COST = 1
 
 
 @dataclass(frozen=True)
@@ -65,11 +67,11 @@ class BattleResult:
 
     @property
     def reward(self):
-        return self.mode.tokens[self.standing] * BOX_REWARD_MULTIPLIER
+        return self.mode.tokens[self.standing] * TOKEN_MULTIPLIER
 
     @property
     def star_token_reward(self):
-        return self.mode.star_tokens[self.standing] * BOX_REWARD_MULTIPLIER
+        return self.mode.star_tokens[self.standing] * STAR_TOKEN_MULTIPLIER
 
     @property
     def trophy_delta(self):

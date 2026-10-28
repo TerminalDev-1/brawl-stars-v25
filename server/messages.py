@@ -3,7 +3,7 @@
 Field order is informed by DDBS-V25; these layouts require client validation.
 """
 from protocol import Writer
-from battles import BRAWL_BOX_COST, EVENT_LOCATIONS
+from battles import BIG_BOX_COST, BRAWL_BOX_COST, EVENT_LOCATIONS
 from brawlers import OWNED_BRAWLERS, SHELLY
 
 def login_ok(player):
@@ -43,7 +43,8 @@ def home_data(p, pending=()):
     w.vint(0)
     for vals in ((20,35,75,140,290,480,800,1250),(1,2,3,4,5,10,15,20),(10,30,80),(6,20,60),(20,50,140,280),(150,400,1200,2600)):
         w.vint(len(vals)).values(*vals)
-    w.values(0, 200, 20, 8640, 10, 5, 6, 50, 604800).boolean(True)
+    # Config +0xa8..: ?, daily token limit, tokens per refresh, refresh seconds, star box cost, ...
+    w.values(0, 200, 20, 8640, BIG_BOX_COST, 5, 6, 50, 604800).boolean(True)
     w.values(0, 1).integer(1).integer(41000000).integer(0).integer(1)
     w.values(0, 0).boolean(False).values(0, 0, 0, p['id'], 0, 0, 0, 0)
     name = p.get('name', 'Guest')

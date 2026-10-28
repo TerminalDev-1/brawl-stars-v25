@@ -4,7 +4,8 @@ Pixel uses Max's model and animations, fires 8-Bit's blaster beams at
 1,500 damage each, has 6,200 health, and her Super throws 8-Bit's damage
 booster turret, which also leaves a Max-style speed boost where it lands.
 Every row is cloned from an existing Max or 8-Bit row and appended, so the
-row numbers of existing data stay the same. Applying it twice changes nothing.
+row numbers of existing data stay the same. Re-applying rebuilds Pixel's rows
+in place from their sources, so edits here reach an already patched client.
 """
 import csv
 import io
@@ -20,11 +21,14 @@ ROWS = {
             'WeaponSkill': 'PixelWeapon', 'UltimateSkill': 'PixelUlti',
             'Hitpoints': '6200', 'DefaultSkin': 'PixelDefault',
             'TID': 'TID_PIXEL', 'HeroBundleTID': 'TID_HERO_BUNDLE_PIXEL',
+            # 8-Bit's reload and empty-ammo sounds.
+            'ReloadEffect': 'reload_arcade', 'DryFireEffect': 'arcade_dryfire',
             'OffenseRating': '5', 'DefenseRating': '4', 'UtilityRating': '4',
         }),
     ],
     'csv_logic/skills.csv': [
-        ('ArcadeWeapon', 'PixelWeapon', {'Damage': '1500'}),
+        # Range 21 is 7 tiles (8-Bit's is 30, 10 tiles).
+        ('ArcadeWeapon', 'PixelWeapon', {'Damage': '1500', 'CastingRange': '21'}),
         ('ArcadeUlti', 'PixelUlti', {'Projectile': 'PixelUltiProjectile'}),
     ],
     'csv_logic/projectiles.csv': [
@@ -37,7 +41,9 @@ ROWS = {
         ('SpeedyDefault', 'PixelDefault', {'Conf': 'PixelDefault', 'PetSkin': 'DamageBoosterDefault'}),
     ],
     'csv_logic/skin_confs.csv': [
-        ('SpeedyDefault', 'PixelDefault', {'Character': 'Pixel'}),
+        # No MainAttackEffect, so the weapon's 8-Bit laser effect and sound play
+        # instead of Max's.
+        ('SpeedyDefault', 'PixelDefault', {'Character': 'Pixel', 'MainAttackEffect': ''}),
     ],
     'csv_logic/cards.csv': [
         ('Speedy_unlock', 'Pixel_unlock', {'Target': 'Pixel', 'Rarity': 'legendary', 'SortOrder': '505'}),
@@ -81,15 +87,17 @@ def apply(root):
         header = _fields(lines[0])
         rows = {_fields(l)[0]: l for l in lines[2:] if l and not l.startswith(',')}
         for source, new, changes in additions:
-            if new in rows:
-                continue
             fields = _fields(rows[source])
             fields += [''] * (len(header) - len(fields))
             fields[0] = new
             for column, value in changes.items():
                 fields[header.index(column)] = value
-            lines.append(_line(fields))
-            rows[new] = lines[-1]
+            line = _line(fields)
+            if new in rows:
+                lines[lines.index(rows[new])] = line
+            else:
+                lines.append(line)
+            rows[new] = line
         path.write_bytes(('\r\n'.join(lines) + '\r\n').encode('utf-8'))
     path = root / 'localization/texts.csv'
     text = path.read_bytes().decode('utf-8')
