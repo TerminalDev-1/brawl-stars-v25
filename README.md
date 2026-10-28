@@ -1,0 +1,34 @@
+# Terra — Brawl Stars v25 private server
+
+Terra is an experimental Python server and Android client patch for Brawl Stars 25.107. It is an unofficial project and is not affiliated with Supercell.
+
+The client can log in, create and restore a local account, choose a name, and reach the v25 lobby. This was tested on an ARM-compatible Android 14 tablet. The server supplies a starter Shelly and one Gem Grab event. Battles, progression, the shop, clubs, and friends are not implemented, so Play and most lobby actions do not work yet.
+
+## Run the server
+
+Requires Python 3.10 or newer; no third-party Python packages are needed.
+
+```powershell
+python server/app.py
+```
+
+The server listens on `127.0.0.1:9339`. Accounts, login tokens and names are stored in `server/data/accounts.sqlite3`; keep this file private. The client stores its account token in private Android app data. Account data is not included in this repository.
+
+## Install the client
+
+Download the APK from the Releases page. With the device connected through Android Debug Bridge:
+
+```powershell
+adb install --bypass-low-target-sdk-block -r --abi armeabi-v7a terra-v25.apk
+adb reverse tcp:9339 tcp:9339
+```
+
+Start the server, then launch Terra on the device. Repeat `adb reverse` after reconnecting ADB. The client is installed as `com.terra.brawl25`, separate from the official game. On first launch, review the original client notice yourself and enter a name.
+
+The experimental transport currently supports login, name changes and keepalive; it does not implement the full game protocol. It is designed for local use and should not be exposed to the public internet.
+
+## Build and test
+
+See [client_patch/README.md](client_patch/README.md) for rebuilding the APK. Run `python -m unittest discover -s server -v` for the Python tests.
+
+The server and client patch were written for this project, informed by [DDBS-V25](https://github.com/GDsWELL/DDBS-V25). Brawl Stars game assets belong to their respective owners.

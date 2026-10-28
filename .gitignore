@@ -1,0 +1,12 @@
+# Generated files and local runtime state
+client_src/
+client_work/
+build/
+reference-v25/
+*.apk
+__pycache__/
+*.py[cod]
+server/data/
+*.log
+client_patch/trace_*.js
+client_patch/debug.py
