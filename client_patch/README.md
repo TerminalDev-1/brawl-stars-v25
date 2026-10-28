@@ -11,4 +11,4 @@ python client_patch/build.py --tools PATH_TO_TOOLS --transport --install --seria
 
 The first build creates the ignored `client_work/` directory. The install option sets up `adb reverse tcp:9339 tcp:9339`. The generated signed APK is in `build/`. Preserve the signing key if you need to update the installed app without losing its data.
 
-The version-specific transport bypasses the original network encryption for the local server, redirects the game socket to loopback, and currently forwards login, name and keepalive messages. It does not yet forward gameplay. The APK needs the local Python server to reach the lobby.
+The version-specific transport bypasses the original network encryption for the local server and redirects the game socket to loopback. It uses the client's local simulation for bot battles and sends the completed result to Python. The APK needs the local Python server to reach the lobby and record rewards.

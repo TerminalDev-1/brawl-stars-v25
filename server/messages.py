@@ -18,7 +18,7 @@ def login_ok(player):
 
 def home_data(p):
     w = Writer()
-    w.values(0, 0, 0, 0, 0, 95, 99999).reference(28, 0).reference(43, 0)
+    w.values(0, 0, p.get('trophies', 0), p.get('trophies', 0), 0, 95, 99999).reference(28, 0).reference(43, 0)
     w.values(0, 1).reference(29, 0).values(1).reference(29, 0)
     w.values(0, 0, 0).boolean(False).vint(1).boolean(True)
     w.values(0, 1209599, 0, 0, 0, 0, 8)
@@ -38,8 +38,8 @@ def home_data(p):
     name = p.get('name', 'Guest')
     w.string(name).vint(0 if name == 'Guest' else 1).integer(0).vint(8)
     # Starter Shelly unlock card and resource counters.
-    w.vint(5).values(23, 0, 1, 5, 1, 0, 5, 8, 0, 5, 9, 0, 5, 10, 0)
-    for _ in range(2): w.vint(1).reference(16, 0).vint(0)
+    w.vint(5).values(23, 0, 1, 5, 1, p.get('tokens', 0), 5, 8, 0, 5, 9, 0, 5, 10, 0)
+    for _ in range(2): w.vint(1).reference(16, 0).vint(p.get('trophies', 0))
     w.vint(0)
     w.vint(1).reference(16, 0).vint(0)
     w.vint(1).reference(16, 0).vint(0)

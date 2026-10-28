@@ -4,6 +4,7 @@ import asyncio
 import logging
 from protocol import Reader, Writer, packet, read_packet
 from messages import login_ok, home_data
+from battles import read_result, result_message
 from storage import Accounts
 from pathlib import Path
 
@@ -22,6 +23,7 @@ async def client(reader, writer):
     peer = writer.get_extra_info('peername')
     log.info('connected %s', peer)
     player = None
+    active_match = None
     try:
         while True:
             kind, version, body = await read_packet(reader)
@@ -51,6 +53,40 @@ async def client(reader, writer):
                 name = Reader(body).string()
                 writer.write(packet(20300, Writer().vint(0).integer(0).string(name).bytes()))
                 await writer.drain()
+            elif kind == 14103 and player is not None:
+                if not body:
+                    if active_match is not None:
+                        accounts.abandon_battle(player['id'], active_match)
+                    active_match = accounts.begin_battle(player['id'])
+                    log.info('local bot battle started for account %d', player['id'])
+                else:
+                    request = Reader(body)
+                    fields = [request.vint() for _ in range(4)]
+                    log.info('battle request fields %s', fields)
+                    writer.write(packet(20405, Writer().integer(0).integer(1).integer(6).integer(0).boolean(False).bytes()))
+                    await writer.drain()
+            elif kind == 14110 and player is not None:
+                if active_match is None:
+                    log.warning('battle result ignored: no active match')
+                    continue
+                outcome, participants = read_result(body)
+                old_trophies = player['trophies']
+                progress = accounts.complete_battle(player['id'], active_match, outcome)
+                if progress is None:
+                    log.warning('battle result already processed')
+                    active_match = None
+                    continue
+                active_match = None
+                player['tokens'], player['trophies'] = progress['tokens'], progress['trophies']
+                writer.write(packet(23456, result_message(player, participants, outcome, progress['reward'], progress['trophy_delta'], old_trophies)))
+                await writer.drain()
+                log.info('battle complete account=%d reward=%d tokens=%d', player['id'], progress['reward'], progress['tokens'])
+            elif kind in (14109, 14101) and player is not None:
+                if active_match is not None:
+                    accounts.abandon_battle(player['id'], active_match)
+                    active_match = None
+                writer.write(packet(24101, home_data(player)))
+                await writer.drain()
             elif kind == 10108:
                 writer.write(packet(20108))
                 await writer.drain()
@@ -59,6 +95,8 @@ async def client(reader, writer):
     except (ValueError, UnicodeError) as exc:
         log.warning('invalid message from %s: %s', peer, exc)
     finally:
+        if player is not None and active_match is not None:
+            accounts.abandon_battle(player['id'], active_match)
         writer.close()
         await writer.wait_closed()
         log.info('disconnected %s', peer)

@@ -1,13 +1,38 @@
 import asyncio
+from contextlib import closing
+import sqlite3
 import unittest
 import tempfile
 from pathlib import Path
 from storage import Accounts
+from battles import read_result, result_message
 from unittest.mock import patch
 from protocol import Reader, Writer, packet, read_packet
 from app import decode_login, client
 
 class ProtocolTests(unittest.IsolatedAsyncioTestCase):
+    async def test_battle_lifecycle_over_tcp(self):
+        payload = bytes.fromhex('0001000f070610001d00010100000003596f751004000000000000013110120000000000000132101300000000000001331003000100000000013410080001000000000135')
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Accounts(Path(tmp) / 'accounts.sqlite3')
+            with patch('app.accounts', store):
+                server = await asyncio.start_server(client, '127.0.0.1', 0)
+                async with server:
+                    reader, writer = await asyncio.open_connection(*server.sockets[0].getsockname())
+                    body = Writer().integer(0).integer(0).string().integer(25).integer(0).integer(107).string('hash').bytes()
+                    writer.write(packet(10101, body)); await writer.drain()
+                    _, _, response = await read_packet(reader)
+                    account_id = Reader(response).take(8)
+                    account_id = int.from_bytes(account_id[4:], 'big')
+                    await read_packet(reader)
+                    writer.write(packet(14103) + packet(14110, payload)); await writer.drain()
+                    self.assertEqual((await asyncio.wait_for(read_packet(reader), 2))[0], 23456)
+                    writer.write(packet(14110, payload) + packet(14109)); await writer.drain()
+                    self.assertEqual((await asyncio.wait_for(read_packet(reader), 2))[0], 24101)
+                    with closing(sqlite3.connect(store.path)) as db:
+                        self.assertEqual(db.execute('SELECT tokens FROM accounts WHERE id=?', (account_id,)).fetchone()[0], 20)
+                    writer.close(); await writer.wait_closed()
+
     async def test_fragmented_packet(self):
         reader = asyncio.StreamReader()
         data = packet(10108, b'hello', 3)
@@ -57,6 +82,33 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                     reader, writer = await exchange(account_id, 'bad-token')
                     self.assertEqual(await asyncio.wait_for(reader.read(), 2), b'')
                     writer.close(); await writer.wait_closed()
+
+    def test_battle_result_wire_format(self):
+        # Native v25 Gem Grab result with one player and five bots.
+        payload = bytes.fromhex('0001000f070610001d00010100000003596f751004000000000000013110120000000000000132101300000000000001331003000100000000013410080001000000000135')
+        outcome, roster = read_result(payload)
+        self.assertEqual(outcome, 0)
+        self.assertEqual(len(roster), 6)
+        self.assertEqual(sum(p['local'] for p in roster), 1)
+        encoded = result_message({'id': 1, 'name': 'Test'}, roster, 0, 20, 8, 0)
+        r = Reader(encoded)
+        self.assertEqual([r.vint() for _ in range(4)], [0, 0, 20, 8])
+        with self.assertRaises(ValueError):
+            read_result(payload[:-1])
+
+    def test_battle_rewards_are_persistent_and_once_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = Accounts(Path(tmp) / 'accounts.sqlite3')
+            player = store.login(0, None)
+            match = store.begin_battle(player['id'])
+            self.assertEqual(store.complete_battle(player['id'], match, 0)['tokens'], 20)
+            self.assertIsNone(store.complete_battle(player['id'], match, 0))
+            restored = store.login(player['id'], player['token'])
+            self.assertEqual((restored['tokens'], restored['trophies']), (20, 8))
+            abandoned = store.begin_battle(player['id'])
+            store.abandon_battle(player['id'], abandoned)
+            self.assertIsNone(store.complete_battle(player['id'], abandoned, 0))
+            self.assertEqual(store.login(player['id'], player['token'])['tokens'], 20)
 
     def test_variable_integers(self):
         for value in (-(2**31), -8193, -65, -64, -1, 0, 1, 63, 64, 8191, 8192, 2**31-1):
