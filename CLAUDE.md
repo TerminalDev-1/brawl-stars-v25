@@ -8,3 +8,5 @@
 - Continue authorized work through intermediate milestones without stopping for phase boundaries or periodic confirmations. Keep working until the requested outcome is verified or a genuine external blocker prevents further progress.
 - Do not clone GitHub repositories without the user's permission.
 - Implement the project from the supplied client and original work; do not borrow implementation from other repositories. Battles should use computer-controlled bots.
+
+- Committing means commit and push. After every finished change, push the code, rebuild the APK (`python client_patch/build.py --transport`) and publish it as a new GitHub release on TerminalDev-1/brawl-stars-v25, even when only the server changed.
