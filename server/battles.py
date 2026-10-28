@@ -1,7 +1,7 @@
 """v25 bot battle modes, rewards and result handling."""
 from dataclasses import dataclass
 from protocol import Reader, Writer
-from brawlers import OWNED_BRAWLERS
+from brawlers import BRAWLERS
 
 # Milestone types from csv_logic/milestones.csv used by the result screen.
 MILESTONE_BRAWLER_RANK = 1
@@ -14,8 +14,8 @@ STARTER_POWER = 1
 PENDING_TOKENS = 3
 PENDING_TROPHIES = 4
 PENDING_STAR_TOKENS = 5
-# This server's reward boost on the game's usual amounts.
-TOKEN_MULTIPLIER = 80
+# Tokens are the game's usual amounts; star tokens are boosted 8x.
+TOKEN_MULTIPLIER = 1
 STAR_TOKEN_MULTIPLIER = 8
 # Tokens and star tokens needed for a box (the game's defaults are 100 and 10).
 BRAWL_BOX_COST = 1
@@ -172,8 +172,8 @@ def read_result(payload):
     if sorted({p['team'] for p in participants}) != list(range(teams)) or \
             any(sum(p['team'] == t for p in participants) != mode.team_size for t in range(teams)):
         raise ValueError('invalid team composition')
-    if next(p for p in participants if p['local'])['brawler'] not in OWNED_BRAWLERS:
-        raise ValueError('unowned brawler')
+    if next(p for p in participants if p['local'])['brawler'] not in BRAWLERS:
+        raise ValueError('unknown brawler')
     if mode.placement and not 1 <= placement <= teams:
         raise ValueError('invalid placement')
     return BattleResult(mode, outcome, placement, participants)

@@ -4,7 +4,7 @@ Field order is informed by DDBS-V25; these layouts require client validation.
 """
 from protocol import Writer
 from battles import BIG_BOX_COST, BRAWL_BOX_COST, EVENT_LOCATIONS
-from brawlers import OWNED_BRAWLERS, SHELLY
+from brawlers import SHELLY, STARTER_BRAWLERS, unlock_card
 
 def login_ok(player):
     w = Writer()
@@ -49,24 +49,23 @@ def home_data(p, pending=()):
     w.values(0, 0).boolean(False).values(0, 0, 0, p['id'], 0, 0, 0, 0)
     name = p.get('name', 'Guest')
     w.string(name).vint(0 if name == 'Guest' else 1).integer(0).vint(8)
-    owned = sorted(OWNED_BRAWLERS)
-    brawlers = p.get('brawlers') or {b: (0, 0) for b in owned}
+    brawlers = p.get('brawlers') or {b: (0, 0, 0, 0) for b in STARTER_BRAWLERS}
+    owned = sorted(brawlers)
     # Resources: one unlock card per owned brawler, then tokens (Gold),
-    # HeroLvlUpMaterial, star tokens (FirstWins) and LegendaryTrophies.
+    # coins (HeroLvlUpMaterial), star tokens (FirstWins) and LegendaryTrophies.
     w.vint(len(owned) + 4)
     for b in owned:
-        w.reference(23, OWNED_BRAWLERS[b]).vint(1)
-    w.values(5, 1, p.get('tokens', 0), 5, 8, 0, 5, 9, p.get('star_tokens', 0), 5, 10, 0)
-    # Per-brawler trophies, then highest trophies.
-    for column in (0, 1):
+        w.reference(23, unlock_card(b)).vint(1)
+    w.values(5, 1, p.get('tokens', 0), 5, 8, p.get('coins', 0), 5, 9, p.get('star_tokens', 0), 5, 10, 0)
+    # Per-brawler lists: trophies, highest trophies, (empty), power points, power level.
+    def per_brawler(column):
         w.vint(len(owned))
         for b in owned:
-            w.reference(16, b).vint(brawlers.get(b, (0, 0))[column])
+            w.reference(16, b).vint(brawlers[b][column])
+    per_brawler(0)
+    per_brawler(1)
     w.vint(0)
-    # Two more per-brawler lists, all zero (power level 1).
-    for _ in range(2):
-        w.vint(len(owned))
-        for b in owned:
-            w.reference(16, b).vint(0)
+    per_brawler(2)
+    per_brawler(3)
     w.values(0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1585502369)
     return w.bytes()

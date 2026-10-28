@@ -55,6 +55,10 @@ def main():
         data = data.replace(needle, inject + needle)
         smali.write_text(data, encoding='utf-8')
     pixel.apply(SOURCE / 'assets')
+    # Terra has no Brawl Boxes: show the Mega Box model wherever the game would
+    # show a Brawl Box (bbox_10), restored from the stock APK copy first.
+    stock = ROOT / 'client_src/assets/sc3d/bbox_11.scw'
+    shutil.copyfile(stock if stock.exists() else SOURCE / 'assets/sc3d/bbox_11.scw', SOURCE / 'assets/sc3d/bbox_10.scw')
     shutil.copyfile(tools / 'libfrida-gadget-arm.so', lib / 'libgadget.so')
     interaction = {'type':'listen','address':'127.0.0.1','port':27042,'on_load':'wait'} if a.debugger else {'type':'script','path':'libgadget.script.so'}
     (lib / 'libgadget.config.so').write_text(json.dumps({'interaction': interaction}), encoding='utf-8')

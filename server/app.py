@@ -4,7 +4,9 @@ import asyncio
 import logging
 from protocol import Reader, Writer, packet, read_packet
 from messages import login_ok, home_data
-from battles import EXPERIENCE_REWARD, pending_gains, read_result, result_message
+import random
+from boxes import BIG_BOX, BRAWL_BOX, box_requests, delivery_command, roll
+from battles import BIG_BOX_COST, BRAWL_BOX_COST, EXPERIENCE_REWARD, pending_gains, read_result, result_message
 from storage import Accounts
 from pathlib import Path
 
@@ -95,6 +97,21 @@ async def client(reader, writer):
                 writer.write(packet(24101, home_data(player, pending)))
                 pending = []
                 await writer.drain()
+            elif kind == 14102 and player is not None and len(body) > 9:
+                for box_type, tick in box_requests(body):
+                    if box_type not in (BRAWL_BOX, BIG_BOX):
+                        log.warning('unsupported box type %d', box_type)
+                        continue
+                    cost_column, cost = ('tokens', BRAWL_BOX_COST) if box_type == BRAWL_BOX else ('star_tokens', BIG_BOX_COST)
+                    opened = accounts.open_box(player['id'], cost_column, cost, lambda owned: roll(random, box_type, owned))
+                    if opened is None:
+                        log.warning('box type %d not affordable for account %d', box_type, player['id'])
+                        continue
+                    drops, state = opened
+                    player.update(state)
+                    writer.write(packet(24111, delivery_command(box_type, drops, tick)))
+                    await writer.drain()
+                    log.info('box %d opened for account %d: %s', box_type, player['id'], drops)
             elif kind == 10108:
                 writer.write(packet(20108))
                 await writer.drain()
