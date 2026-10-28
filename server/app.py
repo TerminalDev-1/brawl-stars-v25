@@ -75,13 +75,13 @@ async def client(reader, writer):
                 except ValueError:
                     log.warning('rejected battle result payload %s', body.hex())
                     raise
-                progress = accounts.complete_battle(player['id'], active_match, result.reward, result.trophy_delta, EXPERIENCE_REWARD)
+                progress = accounts.complete_battle(player['id'], active_match, result.brawler, result.reward, result.trophy_delta, EXPERIENCE_REWARD, result.star_token_reward)
                 if progress is None:
                     log.warning('battle result already processed')
                     active_match = None
                     continue
                 active_match = None
-                player['tokens'], player['trophies'] = progress['tokens'], progress['trophies']
+                player.update(progress['player'])
                 pending = pending_gains(progress)
                 writer.write(packet(23456, result_message(player, result, progress)))
                 await writer.drain()

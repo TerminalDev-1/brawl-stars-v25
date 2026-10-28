@@ -3,7 +3,8 @@
 Field order is informed by DDBS-V25; these layouts require client validation.
 """
 from protocol import Writer
-from battles import EVENT_LOCATIONS
+from battles import BRAWL_BOX_COST, EVENT_LOCATIONS
+from brawlers import OWNED_BRAWLERS, SHELLY
 
 def login_ok(player):
     w = Writer()
@@ -20,18 +21,19 @@ def login_ok(player):
 def home_data(p, pending=()):
     """Own home data (24101). pending: (type, amount) gains the lobby animates."""
     w = Writer()
-    w.values(0, 0, p.get('trophies', 0), p.get('trophies', 0), 0, 95, 99999).reference(28, 0).reference(43, 0)
+    w.values(0, 0, p.get('trophies', 0), max(p.get('highest_trophies', 0), p.get('trophies', 0)), 0, 95, 99999).reference(28, 0).reference(43, 0)
     w.values(0, 1).reference(29, 0).values(1).reference(29, 0)
     w.values(0, 0, 0).boolean(False).vint(1).boolean(True)
     w.values(0, 1209599, 0, 0, 0, 0, 8)
     w.boolean(True).boolean(True).boolean(True)
-    w.values(0, 0, 0, 0, 200, 0, 0, 0, 0).reference(16, 0)
+    # Ends with the selected brawler.
+    w.values(0, 0, 0, 0, 200, 0, 0, 0, 0).reference(16, p.get('selected_brawler', SHELLY))
     w.string('GB').string('')
     # Pending gains (libg ClientHome daily data +0xc4), as int pairs.
     w.vint(len(pending))
     for kind, amount in pending:
         w.integer(kind).integer(amount)
-    w.values(0, 0, 0, 0, 2019049, 100, 10, 30, 3, 80, 10, 50, 1000, 500, 50, 999900, 0)
+    w.values(0, 0, 0, 0, 2019049, BRAWL_BOX_COST, 10, 30, 3, 80, 10, 50, 1000, 500, 50, 999900, 0)
     w.vint(20)
     for i in range(20): w.vint(i)
     # Event slots: slot, slot index, ?, seconds left, ?, location, ...
@@ -46,11 +48,24 @@ def home_data(p, pending=()):
     w.values(0, 0).boolean(False).values(0, 0, 0, p['id'], 0, 0, 0, 0)
     name = p.get('name', 'Guest')
     w.string(name).vint(0 if name == 'Guest' else 1).integer(0).vint(8)
-    # Starter Shelly unlock card and resource counters.
-    w.vint(5).values(23, 0, 1, 5, 1, p.get('tokens', 0), 5, 8, 0, 5, 9, 0, 5, 10, 0)
-    for _ in range(2): w.vint(1).reference(16, 0).vint(p.get('trophies', 0))
+    owned = sorted(OWNED_BRAWLERS)
+    brawlers = p.get('brawlers') or {b: (0, 0) for b in owned}
+    # Resources: one unlock card per owned brawler, then tokens (Gold),
+    # HeroLvlUpMaterial, star tokens (FirstWins) and LegendaryTrophies.
+    w.vint(len(owned) + 4)
+    for b in owned:
+        w.reference(23, OWNED_BRAWLERS[b]).vint(1)
+    w.values(5, 1, p.get('tokens', 0), 5, 8, 0, 5, 9, p.get('star_tokens', 0), 5, 10, 0)
+    # Per-brawler trophies, then highest trophies.
+    for column in (0, 1):
+        w.vint(len(owned))
+        for b in owned:
+            w.reference(16, b).vint(brawlers.get(b, (0, 0))[column])
     w.vint(0)
-    w.vint(1).reference(16, 0).vint(0)
-    w.vint(1).reference(16, 0).vint(0)
+    # Two more per-brawler lists, all zero (power level 1).
+    for _ in range(2):
+        w.vint(len(owned))
+        for b in owned:
+            w.reference(16, b).vint(0)
     w.values(0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1585502369)
     return w.bytes()

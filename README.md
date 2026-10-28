@@ -2,16 +2,24 @@
 
 Terra is an experimental Python server and Android client patch for Brawl Stars 25.107. It is an unofficial project and is not affiliated with Supercell.
 
-The client can log in, create and restore a local account, choose a name, and play two events against computer-controlled bots: Gem Grab (3v3 with five bots) and Solo Showdown (with nine bots). Completed battles award tokens towards the Brawl Box counter, trophies and experience; all survive restarts.
+The client can log in, create and restore a local account, choose a name, and play two events against computer-controlled bots: Gem Grab (3v3 with five bots) and Solo Showdown (with nine bots). Two brawlers are unlocked: Shelly and **Pixel**, a custom brawler that exists only in Terra. Completed battles award tokens, star tokens, trophies and experience; all survive restarts.
 
-| Event | Tokens | Trophies |
-| --- | --- | --- |
-| Gem Grab | win 20, draw 15, loss 10 | win +8 |
-| Solo Showdown, places 1–10 | 20, 18, 16, 14, 12, 10, 8, 6, 4, 2 | +10, +8, +7, +6, +4, +2, +2, +1, 0, 0 |
+### Rewards
 
-Every battle also awards 8 experience. The Showdown trophies follow the game's lowest trophy bracket (0–49); the Showdown token amounts are this server's own choice. The result screen animates Shelly's rank bar and the experience bar and plays a rank-up when a rank threshold is crossed. Back in the lobby, the earned trophies and tokens fly into their counters. Experience is saved but not yet shown in the lobby.
+Terra boosts box rewards: every token and star token amount is 8× the game's usual amount, and a Brawl Box needs 50 tokens instead of 100. Star boxes still need 10 star tokens.
 
-This was tested on an ARM-compatible Android 14 tablet. Duo Showdown (the client shows a Duo button, but it falls back to Gem Grab), opening boxes, most progression, the shop, clubs, and friends are not implemented yet.
+| Event | Tokens | Star tokens | Trophies |
+| --- | --- | --- | --- |
+| Gem Grab | win 160, draw 120, loss 80 | win 8 | win +8 |
+| Solo Showdown, places 1–10 | 160, 144, 128, 112, 96, 80, 64, 48, 32, 16 | places 1–4: 8 | +10, +8, +7, +6, +4, +2, +2, +1, 0, 0 |
+
+Every battle also awards 8 experience. Each brawler keeps its own trophies; the account total is their sum. The Showdown trophies follow the game's lowest trophy bracket (0–49). The Showdown token amounts and counting places 1–4 as a Showdown win are this server's own choices. The result screen animates the brawler's rank bar and the experience bar and plays a rank-up when a rank threshold is crossed. Back in the lobby, the earned trophies, tokens and star tokens fly into their counters. Experience is saved but not yet shown in the lobby, and boxes cannot be opened yet.
+
+### Pixel
+
+Pixel uses Max's model and animations and fires 8-Bit's blaster beams: 6,200 health, very fast movement, and a burst of 6 beams at 1,500 damage each with very long range. Her Super, Power Surge, throws 8-Bit's damage booster turret (2,800 health, +30% damage for nearby allies), which also leaves a Max-style speed boost where it lands. The client data for her is added by [client_patch/pixel.py](client_patch/pixel.py) during the APK build.
+
+This was tested on an ARM-compatible Android 14 tablet. Pixel's damage booster turret was seen in battle; the speed boost from her Super has not been visually confirmed yet. Duo Showdown (the client shows a Duo button, but it falls back to Gem Grab), opening boxes, most progression, the shop, clubs, and friends are not implemented yet.
 
 ## Run the server
 

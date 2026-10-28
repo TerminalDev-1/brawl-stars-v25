@@ -1,6 +1,7 @@
 """v25 bot battle modes, rewards and result handling."""
 from dataclasses import dataclass
 from protocol import Reader, Writer
+from brawlers import OWNED_BRAWLERS
 
 # Milestone types from csv_logic/milestones.csv used by the result screen.
 MILESTONE_BRAWLER_RANK = 1
@@ -12,6 +13,11 @@ STARTER_POWER = 1
 # Pending gain types the lobby animates into its counters (libg 0x23f2e4, 0x1cfb6c).
 PENDING_TOKENS = 3
 PENDING_TROPHIES = 4
+PENDING_STAR_TOKENS = 5
+# This server's reward boost: every token and star token amount is multiplied.
+BOX_REWARD_MULTIPLIER = 8
+# Tokens needed for a Brawl Box (the game's default is 100).
+BRAWL_BOX_COST = 50
 
 
 @dataclass(frozen=True)
@@ -23,6 +29,7 @@ class Mode:
     layout: int            # battle-end screen layout (header value 0)
     tokens: tuple          # indexed by outcome (Gem Grab) or placement - 1
     trophies: tuple
+    star_tokens: tuple     # one star token for a win, before the multiplier
 
     @property
     def placement(self):
@@ -31,11 +38,13 @@ class Mode:
 
 # Gem Grab outcome order is win, loss, draw. Showdown values are for the
 # 0-49 trophy bracket, the only one a new account can reach so far. The
-# Showdown token amounts are this server's choice, not taken from the client.
-GEM_GRAB = Mode('Gem Grab', 7, 6, 3, 0, (20, 10, 15), (8, 0, 0))
+# Showdown token amounts, and counting places 1-4 as a Showdown win for star
+# tokens, are this server's choice, not taken from the client.
+GEM_GRAB = Mode('Gem Grab', 7, 6, 3, 0, (20, 10, 15), (8, 0, 0), (1, 0, 0))
 SOLO_SHOWDOWN = Mode('Solo Showdown', 220, 10, 1, 2,
                      (20, 18, 16, 14, 12, 10, 8, 6, 4, 2),
-                     (10, 8, 7, 6, 4, 2, 2, 1, 0, 0))
+                     (10, 8, 7, 6, 4, 2, 2, 1, 0, 0),
+                     (1, 1, 1, 1, 0, 0, 0, 0, 0, 0))
 MODES = {m.location: m for m in (GEM_GRAB, SOLO_SHOWDOWN)}
 # Event slots offered in the lobby. The client also shows a Duo button for
 # Showdown, but it falls back to Gem Grab; Duo is not supported yet.
@@ -56,11 +65,19 @@ class BattleResult:
 
     @property
     def reward(self):
-        return self.mode.tokens[self.standing]
+        return self.mode.tokens[self.standing] * BOX_REWARD_MULTIPLIER
+
+    @property
+    def star_token_reward(self):
+        return self.mode.star_tokens[self.standing] * BOX_REWARD_MULTIPLIER
 
     @property
     def trophy_delta(self):
         return self.mode.trophies[self.standing]
+
+    @property
+    def brawler(self):
+        return next(p['brawler'] for p in self.participants if p['local'])
 
     @property
     def screen_outcome(self):
@@ -75,6 +92,8 @@ def pending_gains(progress):
         gains.append((PENDING_TOKENS, progress['reward']))
     if progress['trophy_delta'] > 0:
         gains.append((PENDING_TROPHIES, progress['trophy_delta']))
+    if progress.get('star_token_gain', 0) > 0:
+        gains.append((PENDING_STAR_TOKENS, progress['star_token_gain']))
     return gains
 
 
@@ -141,8 +160,8 @@ def read_result(payload):
             raise ValueError('invalid battle skin')
         skin = r.vint() if skin_table else None
         team, local, name = r.vint(), r.vint(), r.string()
-        # characters.csv in 25.107 has 103 rows.
-        if not 0 <= character < 103 or not 0 <= team < count or local not in (0, 1) or not name or len(name) > 40:
+        # characters.csv in 25.107 has 103 rows; Terra appends Pixel as row 103.
+        if not 0 <= character <= 103 or not 0 <= team < count or local not in (0, 1) or not name or len(name) > 40:
             raise ValueError('invalid battle participant')
         participants.append({'brawler': character, 'skin': skin, 'team': team, 'local': bool(local), 'name': name})
     if r.offset != len(payload) or sum(p['local'] for p in participants) != 1:
@@ -151,7 +170,7 @@ def read_result(payload):
     if sorted({p['team'] for p in participants}) != list(range(teams)) or \
             any(sum(p['team'] == t for p in participants) != mode.team_size for t in range(teams)):
         raise ValueError('invalid team composition')
-    if next(p for p in participants if p['local'])['brawler'] != 0:
+    if next(p for p in participants if p['local'])['brawler'] not in OWNED_BRAWLERS:
         raise ValueError('unowned brawler')
     if mode.placement and not 1 <= placement <= teams:
         raise ValueError('invalid placement')

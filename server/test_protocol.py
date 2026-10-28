@@ -31,7 +31,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
                     writer.write(packet(14110, payload) + packet(14109)); await writer.drain()
                     self.assertEqual((await asyncio.wait_for(read_packet(reader), 2))[0], 24101)
                     with closing(sqlite3.connect(store.path)) as db:
-                        self.assertEqual(db.execute('SELECT tokens FROM accounts WHERE id=?', (account_id,)).fetchone()[0], 20)
+                        self.assertEqual(db.execute('SELECT tokens, star_tokens FROM accounts WHERE id=?', (account_id,)).fetchone(), (160, 8))
                     writer.close(); await writer.wait_closed()
 
     async def test_fragmented_packet(self):
@@ -89,7 +89,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         payload = bytes.fromhex('0001000f070610001d00010100000003596f751004000000000000013110120000000000000132101300000000000001331003000100000000013410080001000000000135')
         result = read_result(payload)
         roster = result.participants
-        self.assertEqual((result.mode, result.outcome, result.reward, result.trophy_delta), (GEM_GRAB, 0, 20, 8))
+        self.assertEqual((result.mode, result.outcome, result.reward, result.trophy_delta, result.star_token_reward), (GEM_GRAB, 0, 160, 8, 8))
         self.assertEqual(len(roster), 6)
         self.assertEqual(sum(p['local'] for p in roster), 1)
         progress = {'reward': 20, 'trophy_delta': 8, 'old_trophies': 8, 'old_highest_trophies': 8,
@@ -123,7 +123,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         # Native v25 Solo Showdown win on location 220: ten players, one per team.
         payload = bytes.fromhex('0100010f9c030a10001d00000100000003646576100c0001000000000131101e000200000000013210020003000000000133101e0004000000000134100e0005000000000135100f0006000000000136100e00070000000001371010000800000000013810100009000000000139')
         result = read_result(payload)
-        self.assertEqual((result.mode, result.placement, result.reward, result.trophy_delta), (SOLO_SHOWDOWN, 1, 20, 10))
+        self.assertEqual((result.mode, result.placement, result.reward, result.trophy_delta, result.star_token_reward), (SOLO_SHOWDOWN, 1, 160, 10, 8))
         self.assertEqual(len(result.participants), 10)
         progress = {'reward': 20, 'trophy_delta': 10, 'old_trophies': 24, 'old_highest_trophies': 24,
                     'old_experience': 0, 'experience_gain': 8}
@@ -132,7 +132,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([r.vint() for _ in range(4)], [2, 1, 20, 10])
         # Tenth place earns nothing and an impossible placement is rejected.
         last = bytearray(payload); last[2] = 10
-        self.assertEqual(read_result(bytes(last)).reward, 2)
+        self.assertEqual((read_result(bytes(last)).reward, read_result(bytes(last)).star_token_reward), (16, 0))
         self.assertEqual(read_result(bytes(last)).trophy_delta, 0)
         last[2] = 11
         with self.assertRaises(ValueError):
@@ -146,6 +146,7 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         progress = {'reward': 20, 'trophy_delta': 8}
         self.assertEqual(pending_gains(progress), [(3, 20), (4, 8)])
         self.assertEqual(pending_gains({'reward': 10, 'trophy_delta': 0}), [(3, 10)])
+        self.assertEqual(pending_gains({'reward': 160, 'trophy_delta': 8, 'star_token_gain': 8}), [(3, 160), (4, 8), (5, 8)])
         player = {'id': 1, 'name': 'Test', 'tokens': 30, 'trophies': 8}
         plain, animated = home_data(player), home_data(player, [(3, 20), (4, 8)])
         # Two int pairs replace the empty list count.
@@ -161,16 +162,26 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             store = Accounts(Path(tmp) / 'accounts.sqlite3')
             player = store.login(0, None)
             match = store.begin_battle(player['id'])
-            self.assertEqual(store.complete_battle(player['id'], match, 20, 8, 8)['tokens'], 20)
-            self.assertIsNone(store.complete_battle(player['id'], match, 20, 8, 8))
+            self.assertEqual(store.complete_battle(player['id'], match, 0, 20, 8, 8)['tokens'], 20)
+            self.assertIsNone(store.complete_battle(player['id'], match, 0, 20, 8, 8))
             restored = store.login(player['id'], player['token'])
             self.assertEqual((restored['tokens'], restored['trophies']), (20, 8))
-            second = store.complete_battle(player['id'], store.begin_battle(player['id']), 20, 8, 8)
+            second = store.complete_battle(player['id'], store.begin_battle(player['id']), 0, 20, 8, 8)
             self.assertEqual((second['old_trophies'], second['old_highest_trophies'], second['old_experience']), (8, 8, 8))
             abandoned = store.begin_battle(player['id'])
             store.abandon_battle(player['id'], abandoned)
-            self.assertIsNone(store.complete_battle(player['id'], abandoned, 20, 8, 8))
+            self.assertIsNone(store.complete_battle(player['id'], abandoned, 0, 20, 8, 8))
             self.assertEqual(store.login(player['id'], player['token'])['tokens'], 40)
+            # Pixel keeps her own trophies; the account total is the sum.
+            pixel = store.complete_battle(player['id'], store.begin_battle(player['id']), 103, 0, 10, 8)
+            self.assertEqual((pixel['old_trophies'], pixel['trophies']), (0, 26))
+            restored = store.login(player['id'], player['token'])
+            self.assertEqual((restored['brawlers'], restored['selected_brawler']), ({0: (16, 16), 103: (10, 10)}, 103))
+            with self.assertRaises(ValueError):
+                store.complete_battle(player['id'], store.begin_battle(player['id']), 1, 0, 8, 8)
+            # Pixel's unlock card (23, 224) is listed after Shelly's (23, 0).
+            home = home_data(restored)
+            self.assertIn(Writer().values(2 + 4, 23, 0, 1, 23, 224, 1).bytes(), home)
 
     def test_variable_integers(self):
         for value in (-(2**31), -8193, -65, -64, -1, 0, 1, 63, 64, 8191, 8192, 2**31-1):

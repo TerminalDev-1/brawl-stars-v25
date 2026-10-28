@@ -6,6 +6,10 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import pixel
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / 'client_work'
@@ -50,6 +54,7 @@ def main():
             raise SystemExit('Cannot identify game library load')
         data = data.replace(needle, inject + needle)
         smali.write_text(data, encoding='utf-8')
+    pixel.apply(SOURCE / 'assets')
     shutil.copyfile(tools / 'libfrida-gadget-arm.so', lib / 'libgadget.so')
     interaction = {'type':'listen','address':'127.0.0.1','port':27042,'on_load':'wait'} if a.debugger else {'type':'script','path':'libgadget.script.so'}
     (lib / 'libgadget.config.so').write_text(json.dumps({'interaction': interaction}), encoding='utf-8')
