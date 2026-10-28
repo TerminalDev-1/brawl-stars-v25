@@ -113,6 +113,24 @@ class Accounts:
                     db.execute('INSERT OR IGNORE INTO brawlers(account_id, brawler) VALUES (?, ?)', (account_id, brawler))
             return drops, self._player(db, account_id)
 
+    def upgrade_brawler(self, account_id, brawler, coin_costs, point_costs):
+        """Raise a brawler one power level, paying coins and power points.
+
+        Returns the updated player, or None when the brawler is not owned, is
+        at the top level, or the account cannot pay.
+        """
+        with closing(sqlite3.connect(self.path)) as db, db:
+            row = db.execute('SELECT power_level, power_points FROM brawlers WHERE account_id=? AND brawler=?', (account_id, brawler)).fetchone()
+            if row is None or row[0] >= len(coin_costs):
+                return None
+            coins, points = coin_costs[row[0]], point_costs[row[0]]
+            if row[1] < points:
+                return None
+            if not db.execute('UPDATE accounts SET coins=coins-? WHERE id=? AND coins>=?', (coins, account_id, coins)).rowcount:
+                return None
+            db.execute('UPDATE brawlers SET power_level=power_level+1, power_points=power_points-? WHERE account_id=? AND brawler=?', (points, account_id, brawler))
+            return self._player(db, account_id)
+
     def abandon_battle(self, account_id, match_id):
         with closing(sqlite3.connect(self.path)) as db, db:
             db.execute("UPDATE battles SET status='abandoned' WHERE id=? AND account_id=? AND status='active'", (match_id, account_id))

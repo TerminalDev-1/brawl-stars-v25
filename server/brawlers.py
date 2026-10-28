@@ -49,3 +49,10 @@ BRAWLERS = {
 
 def unlock_card(brawler):
     return BRAWLERS[brawler][1]
+
+
+# Cost of each upgrade from power level 1 (index 0) to 9. The coin costs are
+# the ones the home data sends the client; the power point costs are the
+# game's standard v25 table and matched the client on the first two levels.
+UPGRADE_COINS = (20, 35, 75, 140, 290, 480, 800, 1250)
+UPGRADE_POWER_POINTS = (20, 30, 50, 80, 130, 210, 340, 550)

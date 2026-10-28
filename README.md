@@ -17,13 +17,17 @@ Every battle also awards 8 experience. Each brawler keeps its own trophies; the 
 
 ### Boxes
 
-Terra has no Brawl Boxes: the token box opens a **Mega Box** (10 Brawl Boxes' worth), and the star token box opens a Big Box (3 Brawl Boxes' worth). Each Brawl Box's worth holds 8–38 coins, 4–20 power points spread over up to two owned brawlers, and a 10% chance of a brawler you don't own yet (rarer brawlers are less likely). Coins, power points and unlocked brawlers are saved; unlocked brawlers can be played. These contents are this server's own design. The Mega Box model replaces the Brawl Box model in the APK, but the lobby's token box icon still shows the Brawl Box picture. Spending coins on upgrades is not implemented yet.
+Terra has no Brawl Boxes: the token box opens a **Mega Box** (10 Brawl Boxes' worth), and the star token box opens a Big Box (3 Brawl Boxes' worth). Each Brawl Box's worth holds 8–38 coins, 4–20 power points spread over up to two owned brawlers, and a 10% chance of a brawler you don't own yet (rarer brawlers are less likely). Coins, power points and unlocked brawlers are saved; unlocked brawlers can be played. These contents are this server's own design. The Mega Box model replaces the Brawl Box model in the APK, and the lobby's token box icon shows the Mega Box picture ([client_patch/box_icon.py](client_patch/box_icon.py)).
+
+### Upgrades
+
+Coins and power points upgrade a brawler on its page, up to power level 9. Each level costs the game's usual amounts: 20, 35, 75, 140, 290, 480, 800 and 1,250 coins, and 20, 30, 50, 80, 130, 210, 340 and 550 power points. The server checks and saves every upgrade.
 
 ### Pixel
 
 Pixel uses Max's model and animations and fires 8-Bit's blaster beams with 8-Bit's laser sounds: 6,200 health, very fast movement, and a burst of 6 beams at 1,500 damage each with a range of 7 tiles. Her Super, Power Surge, throws 8-Bit's damage booster turret (2,800 health, +30% damage for nearby allies), which also leaves a Max-style speed boost where it lands. The client data for her is added by [client_patch/pixel.py](client_patch/pixel.py) during the APK build.
 
-This was tested on an ARM-compatible Android 14 tablet. Pixel's damage booster turret was seen in battle; the speed boost from her Super has not been visually confirmed yet. Duo Showdown (the client shows a Duo button, but it falls back to Gem Grab), upgrades, most progression, the shop, clubs, and friends are not implemented yet.
+This was tested on an ARM-compatible Android 14 tablet. Pixel's damage booster turret was seen in battle; the speed boost from her Super has not been visually confirmed yet. Duo Showdown (the client shows a Duo button, but it falls back to Gem Grab), star powers, most progression, the shop, clubs, and friends are not implemented yet.
 
 ## Run the server
 

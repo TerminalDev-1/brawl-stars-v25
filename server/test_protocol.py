@@ -8,7 +8,9 @@ from storage import Accounts
 from battles import GEM_GRAB, SOLO_SHOWDOWN, pending_gains, read_result, result_message
 from messages import home_data
 import random
-from boxes import BIG_BOX, BRAWL_BOX, DROP_BRAWLER, DROP_COINS, DROP_POWER_POINTS, box_requests, delivery_command, roll
+from boxes import BIG_BOX, BRAWL_BOX, DROP_BRAWLER, DROP_COINS, DROP_POWER_POINTS, delivery_command, roll
+from commands import client_commands
+from brawlers import UPGRADE_COINS, UPGRADE_POWER_POINTS
 from unittest.mock import patch
 from protocol import Reader, Writer, packet, read_packet
 from app import decode_login, client
@@ -161,7 +163,10 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
 
     def test_box_opening(self):
         # Native v25 EndClientTurn with one open box command (500) for a Brawl Box.
-        self.assertEqual(box_requests(bytes.fromhex('00b9050001b407b805b8057f7f05ffffffff')), [(BRAWL_BOX, 376)])
+        self.assertEqual(list(client_commands(bytes.fromhex('00b9050001b407b805b8057f7f05ffffffff'))), [(500, 376, (BRAWL_BOX,))])
+        # Native upgrade (520) of Pixel, and the upgrade popup (522) which is skipped.
+        self.assertEqual(list(client_commands(bytes.fromhex('00881500018808871587157f7f10a701ffffffff'))), [(520, 1351, ((16, 103),))])
+        self.assertEqual(list(client_commands(bytes.fromhex('00b80c00018a08b70cb70c7f7f10a70100000002ffffffff'))), [])
         drops = roll(random.Random(1), BIG_BOX, [0, 103])
         self.assertEqual(drops[0][0], DROP_COINS)
         self.assertTrue(24 <= drops[0][1] <= 114)
@@ -178,6 +183,14 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             # The unlocked brawler can now be played and is listed in the home data.
             store.complete_battle(player['id'], store.begin_battle(player['id']), 5, 0, 8, 0)
             self.assertIn(Writer().reference(23, 20).vint(1).bytes(), home_data(store.login(player['id'], player['token'])))
+            # Pixel has 12 power points and 30 coins: not enough points to upgrade.
+            self.assertIsNone(store.upgrade_brawler(player['id'], 103, UPGRADE_COINS, UPGRADE_POWER_POINTS))
+            store.open_box(player['id'], 'tokens', 1, lambda owned: [(DROP_POWER_POINTS, 8, 103)])
+            state = store.upgrade_brawler(player['id'], 103, UPGRADE_COINS, UPGRADE_POWER_POINTS)
+            self.assertEqual((state['coins'], state['brawlers'][103][2:]), (10, (0, 1)))
+            # Level 2 to 3 needs 35 coins; only 10 left.
+            store.open_box(player['id'], 'star_tokens', 0, lambda owned: [(DROP_POWER_POINTS, 30, 103)])
+            self.assertIsNone(store.upgrade_brawler(player['id'], 103, UPGRADE_COINS, UPGRADE_POWER_POINTS))
         body = delivery_command(BRAWL_BOX, fixed, 376)
         r = Reader(body)
         # Command 203, one Mega Box unit (type 11) with three drops.

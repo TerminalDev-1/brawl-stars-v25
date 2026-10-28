@@ -5,7 +5,7 @@ server sends. Wire formats were read from libg.so 25.107: the client's open
 box command is 500 (field: box type) and the server answers with command 203
 (delivery units of drops, decoded at 0x128a14, drops at 0x4ae53c).
 """
-from protocol import Reader, Writer
+from protocol import Writer
 from brawlers import BRAWLERS
 
 # Box types in the client's open box command (500).
@@ -68,22 +68,3 @@ def delivery_command(box_type, drops, tick):
     w.vint(0).values(tick, tick, 0, 0)
     return w.bytes()
 
-
-def box_requests(body):
-    """Box types and ticks from an EndClientTurn (14102) message.
-
-    The message is three varints, a command count and the commands. Only the
-    open box command (500) is decoded; reading stops at any other command,
-    since other command layouts are not known yet.
-    """
-    r = Reader(body)
-    for _ in range(3):
-        r.vint()
-    requests = []
-    for _ in range(r.vint()):
-        if r.vint() != 500:
-            break
-        tick = r.vint()
-        r.vint(); r.vint(); r.vint()          # second tick and an empty id
-        requests.append((r.vint(), tick))
-    return requests

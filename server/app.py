@@ -5,7 +5,9 @@ import logging
 from protocol import Reader, Writer, packet, read_packet
 from messages import login_ok, home_data
 import random
-from boxes import BIG_BOX, BRAWL_BOX, box_requests, delivery_command, roll
+from boxes import BIG_BOX, BRAWL_BOX, delivery_command, roll
+from brawlers import UPGRADE_COINS, UPGRADE_POWER_POINTS
+from commands import OPEN_BOX, UPGRADE_BRAWLER, client_commands
 from battles import BIG_BOX_COST, BRAWL_BOX_COST, EXPERIENCE_REWARD, pending_gains, read_result, result_message
 from storage import Accounts
 from pathlib import Path
@@ -98,7 +100,17 @@ async def client(reader, writer):
                 pending = []
                 await writer.drain()
             elif kind == 14102 and player is not None and len(body) > 9:
-                for box_type, tick in box_requests(body):
+                for command, tick, fields in client_commands(body):
+                    if command == UPGRADE_BRAWLER:
+                        reference = fields[0]
+                        state = accounts.upgrade_brawler(player['id'], reference[1], UPGRADE_COINS, UPGRADE_POWER_POINTS) if reference and reference[0] == 16 else None
+                        if state is None:
+                            log.warning('upgrade of %s refused for account %d', reference, player['id'])
+                        else:
+                            player.update(state)
+                            log.info('brawler %d upgraded for account %d to power %d', reference[1], player['id'], state['brawlers'][reference[1]][3] + 1)
+                        continue
+                    box_type = fields[0]
                     if box_type not in (BRAWL_BOX, BIG_BOX):
                         log.warning('unsupported box type %d', box_type)
                         continue
