@@ -6,6 +6,9 @@ import secrets
 import sqlite3
 import uuid
 
+# Experience shown on the result screen for every Gem Grab finish.
+EXPERIENCE_REWARD = 8
+
 class Accounts:
     def __init__(self, path):
         self.path = str(path)
@@ -15,9 +18,11 @@ class Accounts:
             cols = {row[1] for row in db.execute('PRAGMA table_info(accounts)')}
             if 'name' not in cols:
                 db.execute("ALTER TABLE accounts ADD COLUMN name TEXT NOT NULL DEFAULT 'Guest'")
-            for column in ('tokens', 'trophies'):
+            for column in ('tokens', 'trophies', 'highest_trophies', 'experience'):
                 if column not in cols:
                     db.execute(f"ALTER TABLE accounts ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0")
+            # Trophies have never dropped so far, so existing accounts start with highest = current.
+            db.execute('UPDATE accounts SET highest_trophies=trophies WHERE highest_trophies<trophies')
             db.execute("CREATE TABLE IF NOT EXISTS battles (id TEXT PRIMARY KEY, account_id INTEGER NOT NULL, status TEXT NOT NULL, reward INTEGER NOT NULL DEFAULT 0)")
     def login(self, account_id, token):
         with closing(sqlite3.connect(self.path)) as db, db:
@@ -46,13 +51,18 @@ class Accounts:
             raise ValueError('invalid battle result')
         reward = (20, 10, 15)[result]
         trophy_delta = (8, 0, 0)[result]
+        experience_gain = EXPERIENCE_REWARD
         with closing(sqlite3.connect(self.path)) as db, db:
             changed = db.execute("UPDATE battles SET status='complete', reward=? WHERE id=? AND account_id=? AND status='active'", (reward, match_id, account_id)).rowcount
             if not changed:
                 return None
-            db.execute('UPDATE accounts SET tokens=tokens+?, trophies=trophies+? WHERE id=?', (reward, trophy_delta, account_id))
+            before = db.execute('SELECT trophies, highest_trophies, experience FROM accounts WHERE id=?', (account_id,)).fetchone()
+            db.execute('UPDATE accounts SET tokens=tokens+?, trophies=trophies+?, highest_trophies=MAX(highest_trophies, trophies+?), experience=experience+? WHERE id=?',
+                       (reward, trophy_delta, trophy_delta, experience_gain, account_id))
             tokens, trophies = db.execute('SELECT tokens, trophies FROM accounts WHERE id=?', (account_id,)).fetchone()
-            return {'tokens': tokens, 'trophies': trophies, 'reward': reward, 'trophy_delta': trophy_delta}
+            return {'tokens': tokens, 'trophies': trophies, 'reward': reward, 'trophy_delta': trophy_delta,
+                    'old_trophies': before[0], 'old_highest_trophies': before[1],
+                    'old_experience': before[2], 'experience_gain': experience_gain}
 
     def abandon_battle(self, account_id, match_id):
         with closing(sqlite3.connect(self.path)) as db, db:

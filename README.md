@@ -2,7 +2,7 @@
 
 Terra is an experimental Python server and Android client patch for Brawl Stars 25.107. It is an unofficial project and is not affiliated with Supercell.
 
-The client can log in, create and restore a local account, choose a name, and play Gem Grab against five computer-controlled bots. Completed battles award tokens towards the Brawl Box counter and trophies; both survive restarts. A win awards 20 tokens and 8 trophies, a draw awards 15 tokens, and a loss awards 10 tokens. This was tested on an ARM-compatible Android 14 tablet. Opening boxes, most progression, the shop, clubs, and friends are not implemented yet.
+The client can log in, create and restore a local account, choose a name, and play Gem Grab against five computer-controlled bots. Completed battles award tokens towards the Brawl Box counter and trophies; both survive restarts. A win awards 20 tokens and 8 trophies, a draw awards 15 tokens, and a loss awards 10 tokens. Every battle also awards 8 experience. The result screen animates Shelly's rank bar and the experience bar from the saved values and plays a rank-up when a rank threshold is crossed. Experience is saved but not yet shown in the lobby. This was tested on an ARM-compatible Android 14 tablet. Opening boxes, most progression, the shop, clubs, and friends are not implemented yet.
 
 ## Run the server
 

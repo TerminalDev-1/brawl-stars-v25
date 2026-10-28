@@ -69,8 +69,11 @@ async def client(reader, writer):
                 if active_match is None:
                     log.warning('battle result ignored: no active match')
                     continue
-                outcome, participants = read_result(body)
-                old_trophies = player['trophies']
+                try:
+                    outcome, participants = read_result(body)
+                except ValueError:
+                    log.warning('rejected battle result payload %s', body.hex())
+                    raise
                 progress = accounts.complete_battle(player['id'], active_match, outcome)
                 if progress is None:
                     log.warning('battle result already processed')
@@ -78,7 +81,7 @@ async def client(reader, writer):
                     continue
                 active_match = None
                 player['tokens'], player['trophies'] = progress['tokens'], progress['trophies']
-                writer.write(packet(23456, result_message(player, participants, outcome, progress['reward'], progress['trophy_delta'], old_trophies)))
+                writer.write(packet(23456, result_message(player, participants, outcome, progress)))
                 await writer.drain()
                 log.info('battle complete account=%d reward=%d tokens=%d', player['id'], progress['reward'], progress['tokens'])
             elif kind in (14109, 14101) and player is not None:

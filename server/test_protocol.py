@@ -90,11 +90,32 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(outcome, 0)
         self.assertEqual(len(roster), 6)
         self.assertEqual(sum(p['local'] for p in roster), 1)
-        encoded = result_message({'id': 1, 'name': 'Test'}, roster, 0, 20, 8, 0)
+        progress = {'reward': 20, 'trophy_delta': 8, 'old_trophies': 8, 'old_highest_trophies': 8,
+                    'old_experience': 16, 'experience_gain': 8}
+        encoded = result_message({'id': 1, 'name': 'Test'}, roster, 0, progress)
         r = Reader(encoded)
-        self.assertEqual([r.vint() for _ in range(4)], [0, 0, 20, 8])
+        self.assertEqual([r.vint() for _ in range(16)], [0, 0, 20, 8] + [0] * 12)
+        r.take(2)
+        self.assertEqual(r.vint(), 6)
+        for p in roster:
+            r.take(1)
+            self.assertEqual((r.vint(), r.vint()), (16, p['brawler']))
+            if r.vint():
+                r.vint()
+            self.assertEqual([r.vint() for _ in range(3)], [8 if p['local'] else 0, 0, 1])
+            if r.take(1)[0]:
+                r.integer(); r.integer()
+            r.string(); [r.vint() for _ in range(3)]
+        # Reward pairs, reward references, then the rank and experience bars.
+        self.assertEqual([r.vint() for _ in range(3)], [1, 0, 8])
+        self.assertEqual(r.vint(), 0)
+        self.assertEqual([r.vint() for _ in range(7)], [2, 1, 8, 8, 5, 16, 16])
+        self.assertEqual((r.vint(), r.take(1)), (0, b'\x00'))
+        self.assertEqual(r.offset, len(encoded))
         with self.assertRaises(ValueError):
             read_result(payload[:-1])
+        # The client's second and third header values vary between matches.
+        self.assertEqual(read_result(bytes.fromhex('0002') + payload[2:])[0], 0)
 
     def test_battle_rewards_are_persistent_and_once_only(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -105,10 +126,12 @@ class ProtocolTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(store.complete_battle(player['id'], match, 0))
             restored = store.login(player['id'], player['token'])
             self.assertEqual((restored['tokens'], restored['trophies']), (20, 8))
+            second = store.complete_battle(player['id'], store.begin_battle(player['id']), 0)
+            self.assertEqual((second['old_trophies'], second['old_highest_trophies'], second['old_experience']), (8, 8, 8))
             abandoned = store.begin_battle(player['id'])
             store.abandon_battle(player['id'], abandoned)
             self.assertIsNone(store.complete_battle(player['id'], abandoned, 0))
-            self.assertEqual(store.login(player['id'], player['token'])['tokens'], 20)
+            self.assertEqual(store.login(player['id'], player['token'])['tokens'], 40)
 
     def test_variable_integers(self):
         for value in (-(2**31), -8193, -65, -64, -1, 0, 1, 63, 64, 8191, 8192, 2**31-1):
